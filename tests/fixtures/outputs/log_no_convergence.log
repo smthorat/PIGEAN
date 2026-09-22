@@ -1,0 +1,13 @@
+Setting sigma_cond=1.797e-05
+Reading gene-loc-file
+Setting X
+Setting Y
+Running Gibbs
+Beginning Gibbs iteration 0
+Sampling new Ys
+Gibbs restart 0
+Gibbs restart 1
+Gibbs iteration 500: ref_val=12.5; max_sem=0.95; max_ratio=0.076
+Adjusting priors with slope -0.00135
+Writing gene set stats to /tmp/test/gss.out
+Writing gene stats to /tmp/test/gs.out

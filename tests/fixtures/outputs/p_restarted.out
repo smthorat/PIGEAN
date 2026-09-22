@@ -1,0 +1,11 @@
+Parameter	Version	Value
+filter_gene_set_p	1	0.01
+num_chains	1	10
+num_chains_betas	1	5
+p	1	0.00342
+p	2	0.00189
+sigma2	1	6.15e-08
+sigma2	2	3.39e-08
+num_gibbs_restarts	1	2
+num_gibbs_iter	1	499
+mad_threshold	1	10

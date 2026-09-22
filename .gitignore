@@ -1,0 +1,14 @@
+# IDE
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Testing
+.pytest_cache/
+
+# Generated results (all engine output / development artifacts)
+results/

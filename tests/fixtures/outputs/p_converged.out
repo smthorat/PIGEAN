@@ -1,0 +1,12 @@
+Parameter	Version	Value
+filter_gene_set_p	1	0.01
+num_chains	1	10
+num_chains_betas	1	5
+p	1	0.00342
+sigma2	1	6.15e-08
+sigma2_cond	1	1.80e-05
+num_gibbs_restarts	1	0
+num_gibbs_iter	1	200
+mad_threshold	1	10
+use_mean_betas	1	True
+sparse_solution	1	True

@@ -1,0 +1,11 @@
+Gene	prior	combined	log_bf	gene_set	beta	weight
+GENE_A	2.09	7.98	5.89	gs_pathway_alpha	0.0219	1
+GENE_A	2.09	7.98	5.89	gs_pathway_beta	0.0187	1
+GENE_A	2.09	7.98	5.89	gs_pathway_delta	0.0150	1
+GENE_B	1.55	7.43	5.89	gs_pathway_alpha	0.0219	1
+GENE_B	1.55	7.43	5.89	gs_pathway_gamma	-0.0120	1
+GENE_C	0.72	6.61	5.89	gs_pathway_beta	0.0187	1
+GENE_C	0.72	6.61	5.89	gs_pathway_epsilon	0.00500	1
+GENE_D	0.35	1.20	0.85	gs_pathway_gamma	-0.0120	1
+GENE_D	0.35	1.20	0.85	gs_pathway_delta	0.0150	1
+GENE_E	0.10	0.50	0.40	gs_pathway_epsilon	0.00500	1

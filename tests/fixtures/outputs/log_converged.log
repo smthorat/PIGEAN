@@ -1,0 +1,19 @@
+Setting sigma_cond=1.797e-05
+Reading gene-loc-file
+Setting X
+Setting Y
+Reading X-in file gene_set_list_mouse_2024.txt
+Analyzing gene sets to pre-filter
+Kept 630 gene sets after p-value and beta filters
+Running Gibbs
+Beginning Gibbs iteration 0
+Sampling new Ys
+Calculating non-infinitesimal betas with mean p=0.00342
+Iteration 11: max ind=(6, 117); max B=0.00218; max W=0.000228; max R=1.334; avg R=1.002; num above=148;
+Parallel 0,1,2,3,4,5,6,7,8,9 converged after 11 iterations
+Gibbs iteration 200: ref_val=8.1; max_sem=0.0491; max_ratio=0.00606
+Desired Gibbs precision achieved; stopping sampling
+Writing gene set stats to /tmp/test/gss.out
+Writing gene stats to /tmp/test/gs.out
+Writing gene gene set stats to /tmp/test/ggss.out
+Writing params to /tmp/test/p.out

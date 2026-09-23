@@ -7,6 +7,10 @@ PIGEAN (Probabilistic Inference of Gene ENrichment) pipeline with a user-facing 
 For input-format decisions, custom data, custom gene sets, Docker, WDL, and
 complete scenario-based commands, start with **[How to Run PIGEAN](docs/how_to_run.md)**.
 
+For a complete technical and scientific knowledge transfer—including every
+phase, component, design decision, output contract, limitation, and maintenance
+procedure—read **[PIGEAN Complete Knowledge Transfer and Technical Handover](docs/complete_handover.md)**.
+
 ```bash
 python3 run_pigean.py \
     --analysis positive-controls \

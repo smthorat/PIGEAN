@@ -4,6 +4,9 @@ PIGEAN (Probabilistic Inference of Gene ENrichment) pipeline with a user-facing 
 
 ## Quick Start
 
+For input-format decisions, custom data, custom gene sets, Docker, WDL, and
+complete scenario-based commands, start with **[How to Run PIGEAN](docs/how_to_run.md)**.
+
 ```bash
 python3 run_pigean.py \
     --analysis positive-controls \
@@ -13,9 +16,9 @@ python3 run_pigean.py \
 
 ## Architecture
 
-- **`engine/priors.py`** — the frozen scientific engine (unmodified PIGEAN Gibbs sampler)
+- **`engine/priors.py`** — the frozen scientific engine (unmodified PIGEAN implementation)
 - **`run_pigean.py`** — user-facing CLI wrapper
-- **`pigean/`** — wrapper modules (config, validation, QC, provenance, convergence, interpretation)
+- **`pigean/`** — wrapper modules (config, validation, QC, modes, provenance, stability, interpretation)
 
 The wrapper adds usability, input QC, convergence assessment, interpretation, and provenance around the existing PIGEAN engine without changing its scientific behavior.
 
@@ -49,16 +52,44 @@ A wrapper run produces:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--input` | (required) | Gene list file, one gene per line |
+| `--input` | (required) | Evidence file; format is selected by `--analysis` |
 | `--output` | (required) | Output directory |
-| `--analysis` | `positive-controls` | Analysis type |
+| `--analysis` | `positive-controls` | Supported production inputs: positive controls, gene Bayes factors, exome, or GWAS |
+| `--mode` | `standard` | Model pathway (`standard` or `naive-priors`) |
 | `--gene-sets` | `default` | Gene set profile |
-| `--genome-build` | `hg19` | Genome build |
+| `--genome-build` | `hg19` | Genome build; explicit for GWAS (included references are hg19/GRCh37) |
 | `--preset` | `standard` | Parameter preset |
 | `--config` | none | Optional JSON config for parameter overrides |
 | `--overwrite` | false | Overwrite existing output directory |
 
-## Phase 5: Stability Assessment
+## Advanced Modes
+
+Evidence type and model mode are separate choices. `--analysis` describes the
+evidence supplied by the researcher; `--mode` selects how the engine calculates
+gene priors.
+
+- `standard` is the default, validated outer-Gibbs workflow and supports the
+  existing positive-controls, Bayes-factor, exome, and GWAS adapters.
+- `naive-priors` is currently supported only with positive controls. It
+  estimates gene-set effects with the engine's inner sampler, then directly
+  computes mean-centered priors without the outer gene-prior Gibbs loop. It
+  does not emit `combined_D`; reports rank genes by `combined` and mark both the
+  outer-Gibbs stability criterion and formal MCMC convergence `NOT_APPLICABLE`.
+
+```bash
+python3 run_pigean.py \
+    --analysis positive-controls \
+    --mode naive-priors \
+    --input examples/gene_list \
+    --output results/runs/example_naive
+```
+
+Factor, PheWAS, anchors, `phi`, and `alpha0` were investigated but are not
+exposed because their current engine contracts cannot be safely generalized or
+validated by the wrapper. See `docs/advanced_modes.md` for the compatibility
+matrix and limitations.
+
+## Stability Assessment
 
 Phase 5 adds interpretation reports and PIGEAN stability diagnostics:
 
@@ -67,6 +98,8 @@ Phase 5 adds interpretation reports and PIGEAN stability diagnostics:
   when the criterion is satisfied.
 - **Formal MCMC convergence**: Always `NOT_FORMALLY_ASSESSED` — the frozen
   engine does not retain independent chain traces for R-hat/ESS.
+- **Naive-priors**: both diagnostics are `NOT_APPLICABLE` because the outer
+  gene-prior Gibbs loop is not run.
 - **Terminology correction**: Following a scientific audit, all statuses use
   precise terminology that distinguishes engine-specific stability from formal
   MCMC convergence.  See `docs/convergence.md` for details.
@@ -90,5 +123,5 @@ See `workflows/rock_pigean.wdl` for the parameterized workflow that calls the wr
 ## Unit Tests
 
 ```bash
-python3 -m pytest tests/ -v
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```

@@ -21,6 +21,8 @@ from pigean.adapters import (
 )
 from pigean.adapters.positive_controls import PositiveControlsAdapter
 from pigean.adapters.gene_sets import prepare_custom_gene_sets
+from pigean.modes import SUPPORTED_MODES, get_mode
+from pigean.modes.base import StabilityApplicability
 from pigean.validation import (
     validate_input_genes, write_gene_qc_tsv,
     compute_validation_status, validate_background,
@@ -33,7 +35,9 @@ from pigean.parsers import (
     parse_gene_stats, parse_gene_set_stats,
     parse_gene_gene_set_stats, parse_params,
 )
-from pigean.convergence import assess_convergence, write_convergence_json
+from pigean.convergence import (
+    assess_convergence, make_not_applicable_result, write_convergence_json,
+)
 from pigean.interpretation import interpret_results
 
 
@@ -42,6 +46,21 @@ def _write_fail_manifest(config, base_dir, output_dir, start_time,
                          validation_issues=None, **extra_kwargs):
     """Write a manifest for a failed validation and exit."""
     end_time = datetime.now()
+    if "advanced_mode" not in extra_kwargs:
+        try:
+            extra_kwargs["advanced_mode"] = get_mode(
+                config.get("mode", "standard")
+            ).describe(config)
+        except ValueError:
+            extra_kwargs["advanced_mode"] = {
+                "name": config.get("mode"),
+                "user_supplied_parameters": {},
+                "resolved_parameters": {},
+                "engine_arguments": [],
+                "compatibility_status": "NOT_VERIFIED",
+                "stability_applicability": "UNKNOWN",
+                "interpretation_compatibility": "UNKNOWN",
+            }
     manifest = generate_manifest(
         config=config,
         file_result=file_result,
@@ -71,7 +90,7 @@ def main():
         epilog="""
 Examples:
   # Positive controls (default)
-  python3 run_pigean.py --input ex/gene_list --output runs/my_run
+  python3 run_pigean.py --input examples/gene_list --output runs/my_run
 
   # Gene-level Bayes factors
   python3 run_pigean.py --analysis gene-bayes-factor \\
@@ -85,6 +104,10 @@ Examples:
   # Exome associations
   python3 run_pigean.py --analysis exome \\
       --input exome_results.tsv --output runs/exome_run
+
+  # Naive-priors model (verified for positive controls)
+  python3 run_pigean.py --analysis positive-controls --mode naive-priors \\
+      --input examples/gene_list --output runs/naive_run
         """,
     )
 
@@ -98,6 +121,11 @@ Examples:
     parser.add_argument("--analysis", default=None,
                         choices=SUPPORTED_ANALYSIS_TYPES,
                         help="Analysis/evidence type (default: positive-controls)")
+    parser.add_argument(
+        "--mode", default=None,
+        help=("Statistical model pathway (default: standard). Exposed modes: "
+              + ", ".join(SUPPORTED_MODES)),
+    )
     parser.add_argument("--gene-sets", default=None,
                         choices=["default", "mouse-only", "msigdb-only", "custom"],
                         help="Gene set profile (default: default)")
@@ -182,6 +210,12 @@ Examples:
                         default=None,
                         help="Enable convergence trace output (gss_trace.out)")
 
+    # Recognize selected internal engine knobs only to reject them through the
+    # Phase 6 validation/manifest path. They are intentionally absent from help.
+    parser.add_argument("--anchor", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--phi", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--alpha0", default=None, help=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
     start_time = datetime.now()
@@ -227,6 +261,28 @@ Examples:
 
     # ── Step 3: Write resolved config ──
     write_resolved_config(config, output_dir)
+
+    # ── Phase 6: Resolve and validate the model mode ──
+    try:
+        mode = get_mode(config.get("mode", "standard"))
+    except ValueError as e:
+        print(f"ERROR: {e}")
+        _write_fail_manifest(
+            config, base_dir, output_dir, start_time,
+            validation_issues=[str(e)],
+        )
+
+    mode_issues = mode.validate_config(config)
+    mode_metadata = mode.describe(config)
+    if mode_issues:
+        print("ERROR: Advanced-mode validation failed:")
+        for issue in mode_issues:
+            print(f"  - {issue}")
+        _write_fail_manifest(
+            config, base_dir, output_dir, start_time,
+            validation_issues=mode_issues,
+            advanced_mode=mode_metadata,
+        )
 
     # ── Step 4: Select evidence adapter ──
     try:
@@ -400,6 +456,7 @@ Examples:
             start_time=start_time,
             end_time=end_time,
             evidence_norm_result=evidence_norm_result,
+            advanced_mode=mode_metadata,
         )
         write_manifest(manifest, output_dir)
         sys.exit(1)
@@ -415,6 +472,8 @@ Examples:
             if background_norm_result else None
         ),
         enable_convergence_trace=bool(config.get("enable_convergence_trace")),
+        engine_subcommand=mode.ENGINE_SUBCOMMAND,
+        mode_engine_args=mode.build_engine_args(config),
     )
     save_command(cmd, output_dir)
 
@@ -445,10 +504,18 @@ Examples:
             "ggss": parsed_ggss, "p": parsed_params,
         }
 
-        convergence_result = assess_convergence(
-            parsed_params,
-            log_path=os.path.join(output_dir, "pigean_run.log"),
-        )
+        if (mode.STABILITY_APPLICABILITY
+                == StabilityApplicability.NOT_APPLICABLE):
+            convergence_result = make_not_applicable_result(
+                "This analysis mode does not use the outer Gibbs sampling "
+                "pathway; the PIGEAN max-fractional-SEM stability criterion "
+                "and formal MCMC convergence are not applicable."
+            )
+        else:
+            convergence_result = assess_convergence(
+                parsed_params,
+                log_path=os.path.join(output_dir, "pigean_run.log"),
+            )
         write_convergence_json(convergence_result, output_dir)
         print(f"PIGEAN stability: "
               f"{convergence_result['stability_status'].value} "
@@ -457,6 +524,7 @@ Examples:
         interpretation_result = interpret_results(
             parsed_gs, parsed_gss, parsed_ggss, parsed_params,
             convergence_result, analysis_type,
+            advanced_mode=mode.NAME,
         )
     else:
         # Engine failed — assess what we can
@@ -495,6 +563,7 @@ Examples:
         parsed_outputs=parsed_outputs,
         convergence_result=convergence_result,
         interpretation_result=interpretation_result,
+        advanced_mode=mode_metadata,
     )
     write_manifest(manifest, output_dir)
 

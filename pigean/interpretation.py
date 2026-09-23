@@ -15,6 +15,8 @@ Language constraints enforced:
   ALWAYS: "prioritized", "model-derived", "candidate", "associated", "enriched"
 """
 
+import copy
+
 
 # ─── Forbidden language terms ──────────────────────────────────────────
 
@@ -150,7 +152,8 @@ INTERPRETATION_CONTRACTS = {
 
 def interpret_results(parsed_gs, parsed_gss, parsed_ggss, parsed_params,
                       convergence_result, analysis_type,
-                      top_n_genes=20, top_n_gene_sets=20):
+                      top_n_genes=20, top_n_gene_sets=20,
+                      advanced_mode="standard"):
     """Generate structured interpretation from parsed outputs.
 
     Only VERIFIED metrics are interpreted.  Unverified metrics are omitted.
@@ -168,14 +171,34 @@ def interpret_results(parsed_gs, parsed_gss, parsed_ggss, parsed_params,
     Returns:
         dict  –  structured interpretation (see module docstring).
     """
+    contracts = copy.deepcopy(INTERPRETATION_CONTRACTS)
+    ranking_metric = "combined_D"
+    if advanced_mode == "naive-priors":
+        ranking_metric = "combined"
+        contracts.pop("combined_D", None)
+        contracts["prior"]["definition"] = (
+            "Mean-centered gene prior log-odds computed directly from "
+            "gene-set memberships and estimated gene-set effects"
+        )
+        contracts["prior"]["formula"] = (
+            "X * beta / scale_factors, mean-centered; no outer gene-prior "
+            "Gibbs update"
+        )
+        contracts["prior"]["anti_interpretation"] = (
+            "This is the engine's naive-priors calculation and is not the "
+            "same estimator as the standard outer-Gibbs prior."
+        )
+
     result = {
         "gene_summary": None,
         "gene_set_summary": None,
         "gene_pathway_links": None,
         "convergence_note": _convergence_note(convergence_result),
-        "interpretation_contracts": INTERPRETATION_CONTRACTS,
+        "interpretation_contracts": contracts,
         "caveats": [],
         "analysis_type": analysis_type,
+        "advanced_mode": advanced_mode,
+        "ranking_metric": ranking_metric,
     }
 
     has_positive_control = False
@@ -199,7 +222,9 @@ def interpret_results(parsed_gs, parsed_gss, parsed_ggss, parsed_params,
                 for i, g in enumerate(candidate_genes[:top_n_genes])
             ],
             "total_genes": parsed_gs.get("row_count", len(genes)),
-            "note": _gene_summary_note(analysis_type, has_positive_control),
+            "note": _gene_summary_note(
+                analysis_type, has_positive_control, advanced_mode
+            ),
         }
 
     # ── Gene-set summary ───────────────────────────────────────────
@@ -237,6 +262,7 @@ def interpret_results(parsed_gs, parsed_gss, parsed_ggss, parsed_params,
     # ── Caveats ────────────────────────────────────────────────────
     result["caveats"] = _generate_caveats(
         analysis_type, convergence_result, has_positive_control,
+        advanced_mode,
     )
 
     return result
@@ -295,14 +321,22 @@ def _format_gene_entry(gene_dict, rank, status):
     }
 
 
-def _gene_summary_note(analysis_type, has_positive_control):
+def _gene_summary_note(analysis_type, has_positive_control,
+                       advanced_mode="standard"):
     """Interpretation note for the gene summary section."""
-    note = (
-        "combined_D represents the model-derived posterior probability of "
-        "gene-disease association, integrating gene-set annotations (prior) "
-        "and observed data (log_bf). Higher values indicate stronger model "
-        "evidence. This is NOT an externally verified probability."
-    )
+    if advanced_mode == "naive-priors":
+        note = (
+            "Genes are ranked by combined log-odds (prior + log_bf). The "
+            "naive-priors engine path does not emit combined_D and does not "
+            "run the outer gene-prior Gibbs update."
+        )
+    else:
+        note = (
+            "combined_D represents the model-derived posterior probability of "
+            "gene-disease association, integrating gene-set annotations (prior) "
+            "and observed data (log_bf). Higher values indicate stronger model "
+            "evidence. This is NOT an externally verified probability."
+        )
     if has_positive_control:
         note += (
             " INPUT genes were provided as positive controls; their elevated "
@@ -365,6 +399,7 @@ def _build_gene_pathway_links(parsed_ggss, top_gene_names, top_gs_names,
                 is_input = has_pc and pc is not None and _is_positive(pc)
                 gene_info[name] = {
                     "combined_D": _safe_float(g.get("combined_D")),
+                    "combined": _safe_float(g.get("combined")),
                     "log_bf": _safe_float(g.get("log_bf")),
                     "status": "INPUT" if is_input else "CANDIDATE",
                 }
@@ -391,6 +426,7 @@ def _build_gene_pathway_links(parsed_ggss, top_gene_names, top_gs_names,
         info = gene_info.get(gene_name, {})
         links_by_gene[gene_name] = {
             "combined_D": info.get("combined_D"),
+            "combined": info.get("combined"),
             "status": info.get("status", "CANDIDATE"),
             "contributing_gene_sets": [
                 {
@@ -471,27 +507,51 @@ def _convergence_note(convergence_result):
 
 # ─── Caveats ───────────────────────────────────────────────────────────
 
-def _generate_caveats(analysis_type, convergence_result, has_positive_control):
+def _generate_caveats(analysis_type, convergence_result, has_positive_control,
+                      advanced_mode="standard"):
     """Generate analysis-appropriate caveats."""
-    caveats = [
-        (
-            "All stochastic metrics (combined_D, prior, beta, avg_postp) "
-            "will differ across runs due to MCMC sampling. The engine does "
-            "not set a fixed random seed."
-        ),
-        (
-            "Gene priors reflect gene-set annotation patterns, not direct "
-            "evidence of biological mechanism. A high combined_D means the "
-            "gene is prioritized by the MODEL, not that it is established "
-            "as disease-relevant."
-        ),
-    ]
+    if advanced_mode == "naive-priors":
+        caveats = [
+            (
+                "The inner gene-set effect sampler is stochastic, so prior, "
+                "combined, beta, and avg_postp can differ across runs. The "
+                "engine does not set a fixed random seed."
+            ),
+            (
+                "Gene priors reflect gene-set annotation patterns, not direct "
+                "evidence of biological mechanism. A high combined score "
+                "means the gene is prioritized by the MODEL, not that it is "
+                "established as disease-relevant."
+            ),
+        ]
+    else:
+        caveats = [
+            (
+                "All stochastic metrics (combined_D, prior, beta, avg_postp) "
+                "will differ across runs due to MCMC sampling. The engine does "
+                "not set a fixed random seed."
+            ),
+            (
+                "Gene priors reflect gene-set annotation patterns, not direct "
+                "evidence of biological mechanism. A high combined_D means the "
+                "gene is prioritized by the MODEL, not that it is established "
+                "as disease-relevant."
+            ),
+        ]
 
     if has_positive_control:
         caveats.append(
             "Input genes (positive controls) are expected to have high "
             "scores because they contribute to the training signal. They "
             "should NOT be interpreted as independently prioritized."
+        )
+
+    if advanced_mode == "naive-priors":
+        caveats.append(
+            "Naive-priors bypasses the outer gene-prior Gibbs update. It "
+            "still estimates gene-set effects with the engine's inner "
+            "sampler, but its gene priors are not directly interchangeable "
+            "with standard-mode Gibbs priors."
         )
 
     if analysis_type == "gwas":

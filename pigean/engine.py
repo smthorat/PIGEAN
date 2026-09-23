@@ -11,7 +11,9 @@ import subprocess
 def build_priors_command(config, evidence_engine_args, reference_paths,
                         gene_set_paths, gene_map_path, output_dir, base_dir,
                         background_normalized_path=None,
-                        enable_convergence_trace=False):
+                        enable_convergence_trace=False,
+                        engine_subcommand="gibbs",
+                        mode_engine_args=None):
     """Build the priors.py command as a Python list.
 
     Uses full engine option names (not optparse prefix abbreviations).
@@ -45,8 +47,13 @@ def build_priors_command(config, evidence_engine_args, reference_paths,
         The command as a list suitable for subprocess.
     """
     cmd = [
-        "python3", "-u", os.path.join(base_dir, "engine", "priors.py"), "gibbs",
+        "python3", "-u", os.path.join(base_dir, "engine", "priors.py"),
+        engine_subcommand,
     ]
+
+    # Mode-specific options are deliberately small and independently
+    # validated by pigean.modes. Evidence options are appended separately.
+    cmd.extend(mode_engine_args or [])
 
     # Annotation gene-set files (order matters — matches Phase 0)
     for gs_path in gene_set_paths:

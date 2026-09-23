@@ -11,6 +11,26 @@ The wrapper (`pigean/interpretation.py`, `pigean/report.py`) uses this contract
 to decide what to display and how to describe it. **No metric may be displayed
 as an interpreted result unless it is marked VERIFIED + INTERPRET below.**
 
+## Mode-specific schema note
+
+This document's full `gs.out` schema describes `standard` mode. The verified
+`naive-priors` path intentionally differs:
+
+- `gs.out` contains `Gene, prior, combined, positive_control, log_bf, N,
+  Chrom, Start, End` and does **not** contain `prior_adj`, `combined_adj`, or
+  `combined_D` under the current locked configuration.
+- `prior` is `X_orig · (betas / scale_factors)`, mean-centered, after the
+  engine's inner gene-set effect sampler; it is not the standard outer-Gibbs
+  prior estimator.
+- `combined` remains `prior + log_bf` and is the report ranking metric.
+- `gss.out`, `ggss.out`, and `p.out` are still emitted, but `p.out` lacks
+  outer-Gibbs iteration/restart fields and `ggss.out` can have a different row
+  count because mode-specific betas pass different write thresholds.
+- Standard and naive numerical values are descriptive outputs of different
+  estimators and must not be treated as interchangeable.
+
+See `docs/advanced_modes.md` for the verified compatibility boundary.
+
 ---
 
 ## Classification System

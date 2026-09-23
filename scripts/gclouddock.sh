@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 project="nitrogenase-docker"
 name="rock-pigean"
-tag="5.0.0"
+tag="6.0.0"
 image="${name}:${tag}"
 echo "Using Google project ${project}, Docker project ${name}, image tag ${image}"
 echo "Cloud-building Docker image:"

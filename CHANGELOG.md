@@ -1,5 +1,26 @@
 # Changelog
 
+## [6.0.0] — Phase 6: Advanced Model Modes (2026-09-22)
+
+### Added
+- High-level advanced-mode registry in `pigean/modes/`, separate from evidence adapters
+- Explicit `standard` default mode and verified `naive-priors` mode
+- Machine-readable evidence/mode compatibility matrix and pre-engine rejection
+- Mode metadata in resolved configuration, reports, and run manifests
+- `NOT_APPLICABLE` stability/formal-convergence contract for naive-priors
+- WDL `mode` input and Phase 6 advanced-mode documentation
+- Docker/WDL publishing tags updated to `6.0.0`; recursive package copy includes modes
+
+### Investigated but not exposed
+- Factor and PheWAS workflows, anchor variants, `phi`, `alpha0`, and `beta0`
+- These paths have specialized input/output semantics or incomplete safe-range/
+  parameter contracts and remain internal or not verified.
+
+### Compatibility
+- Standard mode remains the default and preserves the locked golden workflow.
+- `engine/priors.py` and scientific reference data were not modified.
+- Z-score and percentile engine limitations remain unchanged.
+
 ## [5.0.0] — Phase 5.5: Repository Reorganization (2026-09-21)
 
 ### Reorganized

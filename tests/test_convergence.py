@@ -34,6 +34,7 @@ class TestStabilityStatusEnum(unittest.TestCase):
             "NOT_ASSESSED",
             "TRACE_NOT_AVAILABLE",
             "ENGINE_FAILED",
+            "NOT_APPLICABLE",
         }
         actual = {s.value for s in StabilityStatus}
         self.assertEqual(actual, expected)

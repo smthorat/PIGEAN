@@ -6,7 +6,7 @@
 rock-pigean/
 ├── run_pigean.py              # CLI entry point (wrapper)
 ├── pigean/                    # Wrapper Python package
-│   ├── __init__.py            #   Package version (5.0.0)
+│   ├── __init__.py            #   Package version (6.0.0)
 │   ├── config.py              #   Configuration resolution
 │   ├── engine.py              #   Engine command building + execution
 │   ├── validation.py          #   Input file + gene QC
@@ -16,6 +16,7 @@ rock-pigean/
 │   ├── interpretation.py      #   Results interpretation
 │   ├── report.py              #   Text + HTML report generation
 │   ├── manifest.py            #   Run provenance manifest
+│   ├── modes/                 #   Advanced model-mode contracts + registry
 │   └── adapters/              #   Evidence type adapters
 │       ├── __init__.py        #     Registry + base types
 │       ├── base.py            #     BaseEvidenceAdapter
@@ -44,6 +45,8 @@ rock-pigean/
 │   ├── test_parsers.py
 │   ├── test_convergence.py
 │   ├── test_interpretation.py
+│   ├── test_advanced_modes.py
+│   ├── test_naive_priors.py
 │   ├── golden/                # Golden regression test
 │   │   ├── run_golden_test.sh
 │   │   ├── checkpoints.json
@@ -71,6 +74,7 @@ rock-pigean/
 │   │   ├── phase4_gwas/
 │   │   ├── phase5_interpretation/
 │   │   ├── phase5_report/
+│   │   ├── phase6_advanced/   # Advanced-mode validation artifacts (ignored)
 │   │   └── scratch_outputs/   # Legacy ad-hoc engine output files
 │   └── runs/
 │       └── phase1_run/        # Reference complete wrapper run
@@ -81,6 +85,7 @@ rock-pigean/
 │   ├── evidence_inputs.md     # Evidence input formats
 │   ├── gwas_input.md          # GWAS input format
 │   ├── output_contract.md     # Output file column contracts
+│   ├── advanced_modes.md      # Phase 6 mode contracts + compatibility
 │   ├── path_dependency_audit.md  # Path dependency analysis
 │   ├── repository_inventory_before.md  # Pre-reorganization snapshot
 │   └── phases/                # Phase history documents
@@ -108,6 +113,15 @@ minimal clarity gain. Deferred.
 Moving the Python package would break every import statement. Moving the entry
 point would require Docker ENTRYPOINT, WDL command, and `sys.path` changes.
 Both are already in standard Python project positions.
+
+## Where should I make a change?
+
+- Evidence input format or normalization: `pigean/adapters/`
+- Advanced model mode, compatibility, or engine subcommand: `pigean/modes/`
+- Frozen scientific calculations: do not edit `engine/priors.py`; investigate
+  and document an engine limitation instead
+- Scientist-facing interpretation: `pigean/interpretation.py` and
+  `pigean/report.py`
 
 ### `tests/` kept at root
 

@@ -40,9 +40,11 @@ def generate_report(config, qc_result, manifest, output_dir,
     if convergence_result is not None:
         stab_status = convergence_result["stability_status"].value
         stab_source = convergence_result["assessment_source"]
+        formal_status = convergence_result["formal_convergence_status"].value
     else:
         stab_status = "NOT ASSESSED"
         stab_source = None
+        formal_status = "NOT_FORMALLY_ASSESSED"
 
     lines.append(f"  Validation:  {val_status}")
     lines.append(f"  Execution:   {exec_status}")
@@ -50,7 +52,7 @@ def generate_report(config, qc_result, manifest, output_dir,
     if stab_source:
         stab_line += f" ({stab_source})"
     lines.append(stab_line)
-    lines.append(f"  Formal MCMC convergence: NOT FORMALLY ASSESSED")
+    lines.append(f"  Formal MCMC convergence: {formal_status.replace('_', ' ')}")
     lines.append("")
 
     # Analysis settings
@@ -58,10 +60,35 @@ def generate_report(config, qc_result, manifest, output_dir,
     lines.append("-" * 40)
     analysis = manifest.get("analysis", {})
     lines.append(f"  Analysis type:  {analysis.get('analysis_type', 'unknown')}")
+    lines.append(f"  Model mode:     {analysis.get('model_mode', 'standard')}")
     lines.append(f"  Preset:         {analysis.get('preset', 'unknown')}")
     lines.append(f"  Genome build:   {analysis.get('genome_build', 'unknown')}")
     lines.append(f"  Gene sets:      {analysis.get('gene_sets', 'unknown')}")
     lines.append("")
+
+    advanced_mode = manifest.get("advanced_mode", {})
+    if advanced_mode:
+        lines.append("MODEL MODE")
+        lines.append("-" * 40)
+        lines.append(f"  Name: {advanced_mode.get('name', 'standard')}")
+        lines.append(
+            f"  Compatibility: "
+            f"{advanced_mode.get('compatibility_status', 'UNKNOWN')}"
+        )
+        lines.append(
+            f"  Interpretation: "
+            f"{advanced_mode.get('interpretation_compatibility', 'UNKNOWN')}"
+        )
+        lines.append(
+            f"  Stability applicability: "
+            f"{advanced_mode.get('stability_applicability', 'UNKNOWN')}"
+        )
+        params = advanced_mode.get("resolved_parameters", {})
+        if params:
+            lines.append("  Advanced parameters:")
+            for key, value in sorted(params.items()):
+                lines.append(f"    {key}: {value}")
+        lines.append("")
 
     # Custom gene-set info (Phase 2)
     custom_gs = manifest.get("custom_gene_sets")
@@ -302,6 +329,7 @@ def _stability_display(status_str):
         "NOT_ASSESSED": "NOT ASSESSED",
         "TRACE_NOT_AVAILABLE": "NOT ASSESSED (trace unavailable)",
         "ENGINE_FAILED": "NOT ASSESSED (engine failed)",
+        "NOT_APPLICABLE": "NOT APPLICABLE",
     }
     return mapping.get(status_str, status_str)
 
@@ -318,6 +346,17 @@ def _add_stability_section(lines, convergence_result):
     source = convergence_result["assessment_source"]
     iter_status = convergence_result["iteration_status"].value
     details = convergence_result.get("details", {})
+
+    if stab_status == "NOT_APPLICABLE":
+        lines.append("  PIGEAN stability criterion:  NOT APPLICABLE")
+        lines.append("  Formal MCMC convergence:     NOT APPLICABLE")
+        lines.append("")
+        lines.append("  Reason:")
+        lines.append(
+            f"    {convergence_result.get('formal_convergence_reason', '')}"
+        )
+        lines.append("")
+        return
 
     lines.append(f"  PIGEAN stability criterion:  "
                  f"{_stability_display(stab_status)}")
@@ -366,11 +405,19 @@ def _add_gene_summary_section(lines, interpretation_result):
     if gs is None:
         return
 
-    lines.append("TOP PRIORITIZED GENES (by model-derived posterior probability)")
+    ranking_metric = interpretation_result.get("ranking_metric", "combined_D")
+    if ranking_metric == "combined_D":
+        lines.append("TOP PRIORITIZED GENES (by model-derived posterior probability)")
+    else:
+        lines.append("TOP PRIORITIZED GENES (by combined log-odds)")
     lines.append("-" * 40)
-    lines.append("  Note: combined_D is the model-derived posterior probability of")
-    lines.append("  gene-disease association: exp(combined)/(1+exp(combined)).")
-    lines.append("  This is NOT a validated probability of disease causation.")
+    if ranking_metric == "combined_D":
+        lines.append("  Note: combined_D is the model-derived posterior probability of")
+        lines.append("  gene-disease association: exp(combined)/(1+exp(combined)).")
+        lines.append("  This is NOT a validated probability of disease causation.")
+    else:
+        lines.append("  Note: this mode does not emit combined_D. Genes are ranked by")
+        lines.append("  combined = prior + log_bf on the log-odds scale.")
     lines.append("")
 
     # Input genes
@@ -394,15 +441,19 @@ def _add_gene_summary_section(lines, interpretation_result):
 
 def _add_gene_table(lines, genes):
     """Add a formatted gene table."""
-    header = (f"  {'Rank':>4s}  {'Gene':20s}  {'combined_D':>10s}  "
+    has_combined_d = any(g.get("combined_D") is not None for g in genes)
+    metric_header = "combined_D" if has_combined_d else "combined"
+    header = (f"  {'Rank':>4s}  {'Gene':20s}  {metric_header:>10s}  "
               f"{'prior':>8s}  {'log_bf':>8s}  {'N':>5s}  Location")
     lines.append(header)
     for g in genes:
         loc = g.get("location", "?")
+        metric = g.get("combined_D") if has_combined_d else g.get("combined")
         lines.append(
             f"  {g['rank']:4d}  {g['gene']:20s}  "
-            f"{g['combined_D']:10.4f}  {g['prior']:8.3f}  "
-            f"{g['log_bf']:8.3f}  {g['N']:5d}  {loc}"
+            f"{_fmt_number(metric, 4, 10)}  {_fmt_number(g.get('prior'), 3, 8)}  "
+            f"{_fmt_number(g.get('log_bf'), 3, 8)}  "
+            f"{_fmt_integer(g.get('N'), 5)}  {loc}"
         )
 
 
@@ -451,8 +502,12 @@ def _add_gene_pathway_section(lines, interpretation_result):
 
     for gene_name, info in by_gene.items():
         status = info.get("status", "CANDIDATE")
-        combined_D = info.get("combined_D", 0)
-        lines.append(f"  {gene_name} (combined_D={combined_D:.4f}, {status}):")
+        combined_D = info.get("combined_D")
+        if combined_D is not None:
+            metric_text = f"combined_D={combined_D:.4f}"
+        else:
+            metric_text = f"combined={_fmt_number(info.get('combined'), 4).strip()}"
+        lines.append(f"  {gene_name} ({metric_text}, {status}):")
         for gs_link in info.get("contributing_gene_sets", []):
             gs_name = gs_link["gene_set"]
             if len(gs_name) > 44:
@@ -470,24 +525,18 @@ def _add_metric_guide_section(lines, interpretation_result):
     lines.append("METRIC INTERPRETATION GUIDE")
     lines.append("-" * 40)
 
-    guide = [
-        ("combined_D", "Model-derived posterior probability [0,1]. Higher = stronger"
-         " model evidence for gene-disease association. Computed as"
-         " exp(combined)/(1+exp(combined)). NOT a validated probability."),
-        ("prior", "Gene-level prior log-odds from gene-set model. Higher ="
-         " more annotation evidence."),
-        ("log_bf", "Gene-level log Bayes factor from input data. Higher ="
-         " stronger data evidence."),
-        ("combined", "prior + log_bf (log-odds scale). Combined evidence."),
-        ("beta (gss)", "Posterior mean effect of gene set, LD-corrected."
-         " Higher |value| = stronger."),
-        ("avg_postp", "Posterior inclusion probability for gene set [0,1]."
-         " Higher = more likely non-zero."),
-        ("P (gss)", "Marginal regression p-value (univariate, initial filter)."
-         " May disagree with Gibbs beta."),
-    ]
-    for name, desc in guide:
-        lines.append(f"  {name:16s} {desc}")
+    labels = {
+        "beta_gss": "beta (gss)",
+        "P_gss": "P (gss)",
+    }
+    for name, contract in contracts.items():
+        label = labels.get(name, name)
+        definition = contract.get("definition", "")
+        direction = contract.get("direction", "")
+        description = definition
+        if direction:
+            description += ". " + direction
+        lines.append(f"  {label:16s} {description}")
 
     lines.append("")
 
@@ -503,9 +552,16 @@ def _add_caveats_section(lines, interpretation_result):
     for caveat in caveats:
         lines.append(f"  - {caveat}")
 
-    # Always add the stability/convergence distinction caveat
+    # Explain the appropriate diagnostic contract for the selected mode.
     lines.append("")
     lines.append("  NOTE ON STABILITY vs. CONVERGENCE:")
+    if interpretation_result.get("advanced_mode") == "naive-priors":
+        lines.append("  The naive-priors mode bypasses the outer gene-prior Gibbs loop.")
+        lines.append("  Its PIGEAN stability criterion and formal MCMC convergence are")
+        lines.append("  therefore NOT APPLICABLE. The inner gene-set effect calculation")
+        lines.append("  remains stochastic and is not a substitute for those diagnostics.")
+        lines.append("")
+        return
     lines.append("  PIGEAN's engine-specific stability criterion (max fractional SEM)")
     lines.append("  measures cross-chain agreement of gene posterior estimates. This is")
     lines.append("  the engine's built-in diagnostic from the original PIGEAN codebase.")
@@ -562,9 +618,11 @@ def generate_report_html(config, manifest, output_dir,
     if convergence_result is not None:
         stab_status = convergence_result["stability_status"].value
         stab_source = convergence_result["assessment_source"]
+        formal_status = convergence_result["formal_convergence_status"].value
     else:
         stab_status = "NOT_ASSESSED"
         stab_source = None
+        formal_status = "NOT_FORMALLY_ASSESSED"
 
     badge_colors = {
         "PIGEAN_STABILITY_CRITERION_MET": ("#2d6a2d", "#e8f5e8"),
@@ -573,6 +631,7 @@ def generate_report_html(config, manifest, output_dir,
         "NOT_ASSESSED": ("#666", "#f0f0f0"),
         "TRACE_NOT_AVAILABLE": ("#666", "#f0f0f0"),
         "ENGINE_FAILED": ("#8b1a1a", "#fde8e8"),
+        "NOT_APPLICABLE": ("#4a5568", "#edf2f7"),
     }
     badge_fg, badge_bg = badge_colors.get(stab_status, ("#666", "#f0f0f0"))
     stab_display = _stability_display(stab_status)
@@ -599,8 +658,11 @@ def generate_report_html(config, manifest, output_dir,
                  f"PIGEAN Stability: {stab_display}</span>")
     parts.append(f"<span class='badge'>Execution: {exec_status}</span>")
     parts.append(f"<span class='badge'>Analysis: {analysis_type}</span>")
+    parts.append(f"<span class='badge'>Mode: "
+                 f"{_html_escape(config.get('mode', 'standard'))}</span>")
     parts.append(f"<span class='badge' style='background:#f0f0f0;color:#666'>"
-                 f"Formal MCMC Convergence: NOT FORMALLY ASSESSED</span>")
+                 f"Formal MCMC Convergence: "
+                 f"{formal_status.replace('_', ' ')}</span>")
     parts.append("</div>")
 
     # Stability details
@@ -610,30 +672,38 @@ def generate_report_html(config, manifest, output_dir,
                      f"{stab_display}</p>")
         parts.append(f"<p><strong>Assessment source:</strong> {stab_source}</p>")
 
-        details = convergence_result.get("details", {})
-        sem_ratio = details.get("final_max_sem_ratio")
-        threshold = details.get("max_frac_sem_threshold", 0.01)
+        if stab_status == "NOT_APPLICABLE":
+            parts.append(
+                "<p class='note'>This model mode does not run the outer Gibbs "
+                "pathway. The max-fractional-SEM stability criterion and "
+                "formal MCMC convergence are not applicable.</p>"
+            )
+        else:
 
-        parts.append("<table class='small'>")
-        parts.append("<tr><th>Metric</th><th>Value</th></tr>")
-        if sem_ratio is not None:
-            parts.append(f"<tr><td>Max fractional SEM</td>"
-                         f"<td>{sem_ratio:.6g}</td></tr>")
-        parts.append(f"<tr><td>Threshold (--max-frac-sem)</td>"
-                     f"<td>{threshold}</td></tr>")
-        iter_status = convergence_result["iteration_status"].value
-        parts.append(f"<tr><td>Iteration status</td>"
-                     f"<td>{iter_status.replace('_', ' ')}</td></tr>")
-        parts.append("</table>")
+            details = convergence_result.get("details", {})
+            sem_ratio = details.get("final_max_sem_ratio")
+            threshold = details.get("max_frac_sem_threshold", 0.01)
 
-        parts.append("<p><strong>Formal MCMC convergence:</strong> "
-                     "NOT FORMALLY ASSESSED</p>")
-        parts.append("<p class='note'>The frozen PIGEAN engine does not retain "
-                     "sufficient independent chain traces for standard "
-                     "multi-chain diagnostics such as R-hat or effective "
-                     "sample size. The stability criterion above is the "
-                     "engine's built-in max-fractional-SEM check, not a "
-                     "formal convergence diagnostic.</p>")
+            parts.append("<table class='small'>")
+            parts.append("<tr><th>Metric</th><th>Value</th></tr>")
+            if sem_ratio is not None:
+                parts.append(f"<tr><td>Max fractional SEM</td>"
+                             f"<td>{sem_ratio:.6g}</td></tr>")
+            parts.append(f"<tr><td>Threshold (--max-frac-sem)</td>"
+                         f"<td>{threshold}</td></tr>")
+            iter_status = convergence_result["iteration_status"].value
+            parts.append(f"<tr><td>Iteration status</td>"
+                         f"<td>{iter_status.replace('_', ' ')}</td></tr>")
+            parts.append("</table>")
+
+            parts.append("<p><strong>Formal MCMC convergence:</strong> "
+                         "NOT FORMALLY ASSESSED</p>")
+            parts.append("<p class='note'>The frozen PIGEAN engine does not retain "
+                         "sufficient independent chain traces for standard "
+                         "multi-chain diagnostics such as R-hat or effective "
+                         "sample size. The stability criterion above is the "
+                         "engine's built-in max-fractional-SEM check, not a "
+                         "formal convergence diagnostic.</p>")
 
         evidence = convergence_result.get("evidence", [])
         if evidence:
@@ -653,10 +723,15 @@ def generate_report_html(config, manifest, output_dir,
         gs = interpretation_result.get("gene_summary")
         if gs:
             parts.append("<h2>Top Prioritized Genes</h2>")
-            parts.append("<p class='note'>combined_D is the model-derived posterior "
-                         "probability of gene-disease association: "
-                         "exp(combined)/(1+exp(combined)). "
-                         "<strong>NOT</strong> a validated probability of disease causation.</p>")
+            if interpretation_result.get("ranking_metric") == "combined":
+                parts.append("<p class='note'>This mode does not emit combined_D. "
+                             "Genes are ranked by combined = prior + log_bf "
+                             "on the log-odds scale.</p>")
+            else:
+                parts.append("<p class='note'>combined_D is the model-derived posterior "
+                             "probability of gene-disease association: "
+                             "exp(combined)/(1+exp(combined)). "
+                             "<strong>NOT</strong> a validated probability of disease causation.</p>")
 
             input_genes = gs.get("input_genes", [])
             if input_genes:
@@ -682,9 +757,11 @@ def generate_report_html(config, manifest, output_dir,
             parts.append("<h2>Gene-Pathway Links</h2>")
             for gene_name, info in by_gene.items():
                 status = info.get("status", "CANDIDATE")
-                combined_D = info.get("combined_D", 0)
+                combined_D = info.get("combined_D")
+                metric = (f"combined_D={combined_D:.4f}" if combined_D is not None
+                          else f"combined={_fmt_number(info.get('combined'), 4).strip()}")
                 parts.append(f"<details><summary><strong>{_html_escape(gene_name)}</strong> "
-                             f"(combined_D={combined_D:.4f}, {status})</summary>")
+                             f"({metric}, {status})</summary>")
                 gs_links = info.get("contributing_gene_sets", [])
                 if gs_links:
                     parts.append("<table class='small'><tr><th>Gene Set</th>"
@@ -729,14 +806,19 @@ def generate_report_html(config, manifest, output_dir,
 
 def _gene_table_html(genes):
     """Generate an HTML table for a list of gene entries."""
+    has_combined_d = any(g.get("combined_D") is not None for g in genes)
+    metric_name = "combined_D" if has_combined_d else "combined"
     rows = ["<table>",
-            "<tr><th>Rank</th><th>Gene</th><th>combined_D</th>"
+            f"<tr><th>Rank</th><th>Gene</th><th>{metric_name}</th>"
             "<th>prior</th><th>log_bf</th><th>N</th><th>Location</th></tr>"]
     for g in genes:
+        metric = g.get("combined_D") if has_combined_d else g.get("combined")
         rows.append(
             f"<tr><td>{g['rank']}</td><td>{_html_escape(g['gene'])}</td>"
-            f"<td>{g['combined_D']:.4f}</td><td>{g['prior']:.3f}</td>"
-            f"<td>{g['log_bf']:.3f}</td><td>{g['N']}</td>"
+            f"<td>{_fmt_number(metric, 4).strip()}</td>"
+            f"<td>{_fmt_number(g.get('prior'), 3).strip()}</td>"
+            f"<td>{_fmt_number(g.get('log_bf'), 3).strip()}</td>"
+            f"<td>{g.get('N', 'NA')}</td>"
             f"<td>{_html_escape(g.get('location', '?'))}</td></tr>"
         )
     rows.append("</table>")
@@ -763,6 +845,21 @@ def _html_escape(s):
     """Simple HTML escaping."""
     return (str(s).replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def _fmt_number(value, decimals, width=0):
+    """Format an optional number without crashing mode-specific reports."""
+    if value is None:
+        return f"{'NA':>{width}s}" if width else "NA"
+    rendered = f"{value:.{decimals}f}"
+    return f"{rendered:>{width}s}" if width else rendered
+
+
+def _fmt_integer(value, width=0):
+    if value is None:
+        return f"{'NA':>{width}s}" if width else "NA"
+    rendered = str(int(value))
+    return f"{rendered:>{width}s}" if width else rendered
 
 
 def _get_report_css():

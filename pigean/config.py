@@ -11,6 +11,7 @@ import os
 # Each value here matches the effective scientific setting used in Phase 0.
 DEFAULTS = {
     "analysis": "positive-controls",
+    "mode": "standard",
     "preset": "standard",
     "genome_build": "hg19",
     "gene_sets": "default",
@@ -26,7 +27,7 @@ PRESETS = {
 
 # Keys that are valid in a user-supplied JSON config file.
 CONFIG_FILE_KEYS = {
-    "analysis", "preset", "genome_build", "gene_sets",
+    "analysis", "mode", "preset", "genome_build", "gene_sets",
     "max_num_gene_sets", "gene_filter_value", "gene_set_filter_value",
     "debug_level",
     "custom_gene_set_format", "custom_gene_set_action",
@@ -40,11 +41,14 @@ CONFIG_FILE_KEYS = {
     "gwas_locus_col", "gwas_filter_col", "gwas_filter_value",
     # Phase 5: convergence diagnostics
     "enable_convergence_trace",
+    # Phase 6 guardrails: recognized only so internal engine knobs can be
+    # rejected with a provenance manifest instead of being silently ignored.
+    "anchor", "phi", "alpha0",
 }
 
 # Keys that correspond to argparse CLI options (with default=None).
 CLI_KEYS = {
-    "analysis", "preset", "genome_build", "gene_sets",
+    "analysis", "mode", "preset", "genome_build", "gene_sets",
     "custom_gene_set_format", "custom_gene_set_action",
     # Phase 3
     "gene_column", "score_column", "higher_is_better",
@@ -56,6 +60,8 @@ CLI_KEYS = {
     "gwas_locus_col", "gwas_filter_col", "gwas_filter_value",
     # Phase 5: convergence diagnostics
     "enable_convergence_trace",
+    # Phase 6 guardrails (not advertised; every exposed mode rejects them)
+    "anchor", "phi", "alpha0",
 }
 
 

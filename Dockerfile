@@ -10,7 +10,7 @@ ADD data/refGene_hg19_TSS.subset.loc  data/
 ADD data/NCBI37.3.plink.gene.exons.loc data/
 # Engine (unchanged)
 ADD engine/priors.py engine/priors.py
-# Wrapper (Phase 1-5)
+# Wrapper (Phase 1-6; ADD recursively includes pigean/modes/)
 ADD run_pigean.py run_pigean.py
 ADD pigean/ pigean/
 ADD docs/ docs/

@@ -46,6 +46,9 @@ Input Validation (pigean/validation.py)
 Evidence Adapter (pigean/adapters/*.py)
     │ format-specific validation + engine arg building
     ▼
+Advanced Mode Resolver (pigean/modes/*.py)
+    │ evidence/mode compatibility + engine subcommand
+    ▼
 Reference Resolution (pigean/references.py)
     │ genome build → reference paths + gene sets
     ▼
@@ -93,6 +96,19 @@ Each adapter implements:
 - `run_qc(normalized_path, ...)` → evidence-specific QC
 - `build_engine_args(normalized_path)` → engine CLI arguments
 
+## Advanced Mode Pattern
+
+Evidence adapters answer “what evidence is being supplied?” Advanced modes
+answer “which verified statistical pathway processes that evidence?” The
+registry in `pigean/modes/__init__.py` contains only researcher-facing modes:
+
+- `standard` → engine subcommand `gibbs`
+- `naive-priors` → engine subcommand `naive_priors`
+
+Each mode declares evidence compatibility, stability applicability, report
+compatibility, and mode-specific engine arguments. Unknown, engine-blocked, or
+not-verified combinations fail before engine execution; there is no fallback.
+
 ## Convergence Assessment
 
 The wrapper assesses the PIGEAN engine's built-in stability criterion:
@@ -103,6 +119,8 @@ The wrapper assesses the PIGEAN engine's built-in stability criterion:
   (p.out only)
 - **Formal MCMC convergence**: always `NOT_FORMALLY_ASSESSED` — the engine does
   not retain independent chain traces for R-hat/ESS diagnostics
+- **Naive-priors**: `NOT_APPLICABLE` for both outer-Gibbs stability and formal
+  MCMC convergence; its inner gene-set effect calculation remains stochastic
 
 See `docs/convergence.md` for full details.
 
@@ -124,3 +142,4 @@ from 6 independent runs to accommodate this.
 | 4 | GWAS summary statistics | LOCKED |
 | 5 | Interpretation + stability | LOCKED |
 | 5.5 | Repository reorganization | LOCKED |
+| 6 | Verified advanced-mode framework + naive-priors | COMPLETE WITH DOCUMENTED LIMITATIONS |

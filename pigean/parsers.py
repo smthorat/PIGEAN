@@ -97,11 +97,13 @@ def parse_gene_stats(gs_path):
                  "huge_score_gwas_uncorrected"}
     has_huge_scores = bool(huge_cols & set(columns))
 
-    # Sort by combined_D descending; genes missing the value go last.
+    # Standard mode sorts by combined_D. Non-outer-Gibbs modes do not emit
+    # combined_D, so fall back to the verified combined log-odds and then prior.
     def sort_key(g):
-        v = g.get("combined_D")
-        if isinstance(v, (int, float)):
-            return -v
+        for column in ("combined_D", "combined", "prior"):
+            v = g.get(column)
+            if isinstance(v, (int, float)):
+                return -v
         return float("inf")
 
     genes.sort(key=sort_key)

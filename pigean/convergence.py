@@ -34,6 +34,7 @@ class StabilityStatus(Enum):
     NOT_ASSESSED = "NOT_ASSESSED"
     TRACE_NOT_AVAILABLE = "TRACE_NOT_AVAILABLE"
     ENGINE_FAILED = "ENGINE_FAILED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
 class FormalConvergenceStatus(Enum):
@@ -43,6 +44,7 @@ class FormalConvergenceStatus(Enum):
     traces for standard multi-chain convergence diagnostics.
     """
     NOT_FORMALLY_ASSESSED = "NOT_FORMALLY_ASSESSED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
 class IterationStatus(Enum):
@@ -50,6 +52,7 @@ class IterationStatus(Enum):
     MAX_ITERATION_CAP_REACHED = "MAX_ITERATION_CAP_REACHED"
     STOPPED_BEFORE_CAP = "STOPPED_BEFORE_CAP"
     UNKNOWN = "UNKNOWN"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
 # Backward-compatible alias so existing imports do not break
@@ -417,6 +420,35 @@ def _build_result(stability_status, assessment_source, iteration_status,
         # ── Legacy aliases (backward compat) ──
         "status": stability_status,
         "confidence": assessment_source,
+    }
+
+
+def make_not_applicable_result(reason):
+    """Return a convergence-shaped result for a non-outer-Gibbs mode."""
+    return {
+        "stability_status": StabilityStatus.NOT_APPLICABLE,
+        "assessment_source": "NOT_APPLICABLE",
+        "iteration_status": IterationStatus.NOT_APPLICABLE,
+        "formal_convergence_status": FormalConvergenceStatus.NOT_APPLICABLE,
+        "formal_convergence_reason": reason,
+        "stability_method": "NOT_APPLICABLE",
+        "evidence": [reason],
+        "warnings": [],
+        "details": {
+            "num_gibbs_iter": None,
+            "num_gibbs_restarts": None,
+            "hit_iteration_cap": False,
+            "max_num_iter": None,
+            "num_chains": None,
+            "log_parsed": False,
+            "final_max_r_hat": None,
+            "final_avg_r_hat": None,
+            "final_max_sem_ratio": None,
+            "precision_achieved_message": False,
+            "max_frac_sem_threshold": None,
+        },
+        "status": StabilityStatus.NOT_APPLICABLE,
+        "confidence": "NOT_APPLICABLE",
     }
 
 

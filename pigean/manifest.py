@@ -54,7 +54,8 @@ def generate_manifest(config, file_result, norm_result, qc_result,
                       evidence_norm_result=None,
                       parsed_outputs=None,
                       convergence_result=None,
-                      interpretation_result=None):
+                      interpretation_result=None,
+                      advanced_mode=None):
     """Build the full provenance manifest dict.
 
     Parameters
@@ -115,6 +116,7 @@ def generate_manifest(config, file_result, norm_result, qc_result,
         "dependencies": get_dependency_versions(),
         "analysis": {
             "analysis_type": config.get("analysis", "positive-controls"),
+            "model_mode": config.get("mode", "standard"),
             "preset": config.get("preset", "standard"),
             "genome_build": config.get("genome_build", "hg19"),
             "gene_sets": config.get("gene_sets", "default"),
@@ -155,8 +157,28 @@ def generate_manifest(config, file_result, norm_result, qc_result,
                   if convergence_result is not None
                   else "NOT_ASSESSED")
         ),
-        "formal_convergence_status": "NOT_FORMALLY_ASSESSED",
+        "formal_convergence_status": (
+            convergence_result["formal_convergence_status"].value
+            if convergence_result is not None
+            and hasattr(convergence_result.get("formal_convergence_status"),
+                        "value")
+            else "NOT_FORMALLY_ASSESSED"
+        ),
     }
+
+    # Phase 6: high-level model mode provenance. This remains separate from
+    # analysis/evidence type and records only verified mode-level settings.
+    if advanced_mode is None:
+        advanced_mode = {
+            "name": config.get("mode", "standard"),
+            "user_supplied_parameters": {},
+            "resolved_parameters": {},
+            "engine_arguments": [],
+            "compatibility_status": "UNKNOWN",
+            "stability_applicability": "UNKNOWN",
+            "interpretation_compatibility": "UNKNOWN",
+        }
+    manifest["advanced_mode"] = advanced_mode
 
     # Input checksums
     if norm_result:

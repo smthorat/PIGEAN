@@ -4,6 +4,7 @@ workflow rock_pigean {
     input {
         File input_file
         String analysis_type = "positive-controls"
+        String mode = "standard"
         String preset = "standard"
         String gene_set_profile = "default"
         String genome_build = "hg19"
@@ -51,6 +52,7 @@ workflow rock_pigean {
         input:
             input_file = input_file,
             analysis_type = analysis_type,
+            mode = mode,
             preset = preset,
             gene_set_profile = gene_set_profile,
             genome_build = genome_build,
@@ -102,6 +104,7 @@ task run_pigean {
     input {
         File input_file
         String analysis_type
+        String mode
         String preset
         String gene_set_profile
         String genome_build
@@ -146,7 +149,7 @@ task run_pigean {
         Int disk_gb
     }
     runtime {
-        docker: "gcr.io/nitrogenase-docker/rock-pigean:5.0.0"
+        docker: "gcr.io/nitrogenase-docker/rock-pigean:6.0.0"
         memory: memory_gb + " GB"
         cpu: cpu
         disks: "local-disk " + disk_gb + " HDD"
@@ -154,6 +157,7 @@ task run_pigean {
     command <<<
         python3 -u /app/run_pigean.py \
             --analysis ~{analysis_type} \
+            --mode ~{mode} \
             --input ~{input_file} \
             --gene-sets ~{gene_set_profile} \
             --genome-build ~{genome_build} \

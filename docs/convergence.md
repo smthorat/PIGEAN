@@ -34,6 +34,7 @@ by the Phase 5 wrapper.**
 | `NOT_ASSESSED` | Insufficient data to assess |
 | `TRACE_NOT_AVAILABLE` | Trace output not available |
 | `ENGINE_FAILED` | The engine did not complete |
+| `NOT_APPLICABLE` | The selected mode does not run the outer gene-prior Gibbs loop |
 
 ### `PIGEAN_STABILITY_CRITERION_MET` Does NOT Mean
 
@@ -65,6 +66,19 @@ Specific gaps:
 3. Autocorrelation information needed for ESS is not computed
 4. Chains share identical initialization (not overdispersed)
 
+### Naive-priors mode
+
+The `naive-priors` engine route bypasses `run_gibbs`, the outer gene-prior
+Gibbs loop assessed by the PIGEAN max-fractional-SEM criterion. For this mode:
+
+- PIGEAN stability: `NOT_APPLICABLE`
+- Formal MCMC convergence: `NOT_APPLICABLE`
+- Iteration status: `NOT_APPLICABLE`
+
+The mode still calls the stochastic inner gene-set effect sampler. That does
+not make the outer-Gibbs diagnostic applicable and is stated separately in the
+report caveats.
+
 ## Assessment Source
 
 | Source | Meaning |
@@ -83,6 +97,7 @@ NOT statistical confidence levels.
 | `MAX_ITERATION_CAP_REACHED` | The engine ran all configured iterations |
 | `STOPPED_BEFORE_CAP` | The engine stopped before the iteration limit |
 | `UNKNOWN` | Iteration information not available |
+| `NOT_APPLICABLE` | No outer Gibbs iteration applies to the selected mode |
 
 Iteration status is **separate** from stability status.  The engine can
 hit the iteration cap while still satisfying the stability criterion.
